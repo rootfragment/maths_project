@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quantitative Risk Dashboard</title>
+<style>
+:root{
+  --navy:#1a2744; --gold:#c9a227; --green:#27ae60; --red:#c0392b;
+  --bg:#f5f6fa; --card:#ffffff; --text:#1a2744; --muted:#6b7280;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#12131a; --card:#1c1e29; --text:#eceef2; --muted:#9aa0ae; }
+}
+:root[data-theme="dark"]{ --bg:#12131a; --card:#1c1e29; --text:#eceef2; --muted:#9aa0ae; }
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,sans-serif;}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 48px;}
+h1{font-size:1.3rem;margin:0 0 4px;}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:20px;}
+select{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;background:var(--card);color:var(--text);font-size:1rem;margin-bottom:20px;}
+.card{background:var(--card);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.row .name{font-weight:600;font-size:.92rem;}
+.row .val{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem;}
+input[type=range]{width:100%;accent-color:var(--navy);}
+.weight-tag{font-size:.72rem;color:var(--muted);margin-bottom:14px;}
+.gauge-wrap{text-align:center;padding:10px 0 4px;}
+.score-num{font-size:2.6rem;font-weight:800;}
+.band{font-weight:700;letter-spacing:.03em;font-size:.95rem;margin-top:2px;}
+.bar-outer{position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,var(--green) 0 33%,var(--gold) 33% 66%,var(--red) 66% 100%);margin:14px 0 6px;overflow:visible;}
+.marker{position:absolute;top:-4px;width:2px;height:18px;background:var(--text);}
+.marker.pred{background:#888;}
+.legend{display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);}
+.compare{display:flex;gap:8px;margin-top:16px;}
+.compare .box{flex:1;text-align:center;padding:10px;border-radius:10px;}
+.compare .cur{background:rgba(26,39,68,.08);}
+.compare .prd{background:rgba(39,174,96,.1);}
+.compare .lbl{font-size:.72rem;color:var(--muted);}
+.compare .num{font-size:1.3rem;font-weight:700;}
+.trend{text-align:center;font-size:.85rem;font-weight:600;margin-top:10px;}
+.reset{display:block;margin:18px auto 0;padding:8px 18px;border-radius:8px;border:1px solid var(--navy);background:none;color:var(--navy);font-size:.85rem;cursor:pointer;}
+:root[data-theme="dark"] .reset, :root:not([data-theme="light"]) .reset{color:var(--text);border-color:var(--text);}
+footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Quantitative Risk Dashboard</h1>
+  <div class="sub">Adjust the sliders to see how the Risk Score responds. Weights are derived from data, not hand-picked.</div>
+
+  <select id="ticker"></select>
+
+  <div class="card" id="sliders"></div>
+
+  <div class="card">
+    <div class="gauge-wrap">
+      <div class="score-num" id="scoreNum">--</div>
+      <div class="band" id="bandLbl">--</div>
+    </div>
+    <div class="bar-outer" id="barOuter">
+      <div class="marker" id="markerCur"></div>
+      <div class="marker pred" id="markerPred"></div>
+    </div>
+    <div class="legend"><span>0 Low</span><span>33</span><span>66</span><span>100 High</span></div>
+
+    <div class="compare">
+      <div class="box cur"><div class="lbl">Current (real data)</div><div class="num" id="curNum">--</div></div>
+      <div class="box prd"><div class="lbl">Predicted (next period)</div><div class="num" id="prdNum">--</div></div>
+    </div>
+    <div class="trend" id="trendLbl"></div>
+  </div>
+
+  <button class="reset" id="resetBtn">Reset to real data</button>
+  <footer>Weights derived via RidgeCV regression (out-of-sample) blended with PCA loadings, across 20 tickers.</footer>
+</div>
+
+<script>
+const DATA = {"weights": {"volatility": 0.202, "liquidity": 0.271, "correlation": 0.252, "leverage": 0.06, "track_record": 0.214}, "weights_pca": {"volatility": 0.248, "liquidity": 0.142, "correlation": 0.27, "leverage": 0.093, "track_record": 0.247}, "stocks": {"AAPL": {"scores": {"volatility": 25.2, "liquidity": 18.7, "correlation": 60.1, "leverage": 26.1, "track_record": 55.6}, "current_score": 38.8, "predicted_score": 38.2, "predicted_volatility_score": 22.6}, "TSLA": {"scores": {"volatility": 75.5, "liquidity": 11.3, "correlation": 100.0, "leverage": 6.1, "track_record": 89.6}, "current_score": 63.0, "predicted_score": 56.4, "predicted_volatility_score": 42.8}, "JNJ": {"scores": {"volatility": 10.3, "liquidity": 38.6, "correlation": 2.5, "leverage": 19.2, "track_record": 24.1}, "current_score": 19.5, "predicted_score": 20.4, "predicted_volatility_score": 14.8}, "SPY": {"scores": {"volatility": 8.9, "liquidity": 9.0, "correlation": 51.1, "leverage": 50.0, "track_record": 31.3}, "current_score": 26.8, "predicted_score": 27.3, "predicted_volatility_score": 11.5}, "NVDA": {"scores": {"volatility": 57.5, "liquidity": 9.6, "correlation": 100.0, "leverage": 5.7, "track_record": 61.5}, "current_score": 52.9, "predicted_score": 47.4, "predicted_volatility_score": 30.3}, "KO": {"scores": {"volatility": 8.0, "liquidity": 40.5, "correlation": 4.4, "leverage": 38.5, "track_record": 25.8}, "current_score": 21.5, "predicted_score": 23.3, "predicted_volatility_score": 16.8}, "GME": {"scores": {"volatility": 100.0, "liquidity": 48.9, "correlation": 56.4, "leverage": 23.5, "track_record": 100.0}, "current_score": 70.5, "predicted_score": 60.5, "predicted_volatility_score": 50.4}, "XOM": {"scores": {"volatility": 16.9, "liquidity": 35.1, "correlation": 21.2, "leverage": 5.3, "track_record": 31.5}, "current_score": 25.4, "predicted_score": 26.8, "predicted_volatility_score": 23.9}, "MSFT": {"scores": {"volatility": 17.4, "liquidity": 20.8, "correlation": 50.1, "leverage": 9.7, "track_record": 39.5}, "current_score": 30.8, "predicted_score": 33.6, "predicted_volatility_score": 31.2}, "AMZN": {"scores": {"volatility": 30.9, "liquidity": 21.6, "correlation": 71.3, "leverage": 15.2, "track_record": 51.5}, "current_score": 42.0, "predicted_score": 41.4, "predicted_volatility_score": 28.3}, "META": {"scores": {"volatility": 38.5, "liquidity": 21.8, "correlation": 74.2, "leverage": 14.3, "track_record": 56.9}, "current_score": 45.4, "predicted_score": 48.6, "predicted_volatility_score": 54.1}, "PFE": {"scores": {"volatility": 22.0, "liquidity": 40.0, "correlation": 19.3, "leverage": 24.8, "track_record": 50.8}, "current_score": 32.5, "predicted_score": 30.9, "predicted_volatility_score": 14.3}, "WMT": {"scores": {"volatility": 16.4, "liquidity": 37.1, "correlation": 26.1, "leverage": 23.9, "track_record": 36.5}, "current_score": 29.2, "predicted_score": 31.0, "predicted_volatility_score": 25.4}, "DIS": {"scores": {"volatility": 25.2, "liquidity": 39.7, "correlation": 45.1, "leverage": 13.1, "track_record": 54.8}, "current_score": 39.7, "predicted_score": 39.1, "predicted_volatility_score": 22.4}, "AMD": {"scores": {"volatility": 61.9, "liquidity": 22.1, "correlation": 100.0, "leverage": 2.1, "track_record": 100.0}, "current_score": 65.2, "predicted_score": 63.7, "predicted_volatility_score": 54.3}, "BA": {"scores": {"volatility": 35.8, "liquidity": 36.0, "correlation": 53.3, "leverage": 100.0, "track_record": 80.5}, "current_score": 53.6, "predicted_score": 54.2, "predicted_volatility_score": 38.7}, "INTC": {"scores": {"volatility": 66.3, "liquidity": 33.6, "correlation": 84.1, "leverage": 16.3, "track_record": 100.0}, "current_score": 66.1, "predicted_score": 66.7, "predicted_volatility_score": 69.6}, "NFLX": {"scores": {"volatility": 32.8, "liquidity": 30.1, "correlation": 48.3, "leverage": 18.4, "track_record": 31.9}, "current_score": 34.9, "predicted_score": 34.7, "predicted_volatility_score": 31.9}, "COST": {"scores": {"volatility": 15.1, "liquidity": 35.1, "correlation": 31.5, "leverage": 8.0, "track_record": 28.8}, "current_score": 27.1, "predicted_score": 28.2, "predicted_volatility_score": 20.3}, "T": {"scores": {"volatility": 17.2, "liquidity": 42.4, "correlation": 4.4, "leverage": 43.0, "track_record": 27.2}, "current_score": 24.5, "predicted_score": 25.8, "predicted_volatility_score": 23.7}}};
+
+const FACTORS = [
+  {key:"volatility", label:"Volatility"},
+  {key:"liquidity", label:"Liquidity risk"},
+  {key:"correlation", label:"Market Correlation"},
+  {key:"leverage", label:"Leverage"},
+  {key:"track_record", label:"Track Record risk"},
+];
+
+const weights = DATA.weights;
+const tickers = Object.keys(DATA.stocks);
+const sel = document.getElementById("ticker");
+tickers.forEach(t=>{
+  const o=document.createElement("option"); o.value=t; o.textContent=t; sel.appendChild(o);
+});
+
+const slidersEl = document.getElementById("sliders");
+let sliderInputs = {};
+
+function buildSliders(ticker){
+  slidersEl.innerHTML = "";
+  sliderInputs = {};
+  const scores = DATA.stocks[ticker].scores;
+  FACTORS.forEach(f=>{
+    const val = scores[f.key];
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <div class="row"><span class="name">${f.label}</span><span class="val" id="val_${f.key}">${val.toFixed(1)}</span></div>
+      <input type="range" min="0" max="100" step="0.1" value="${val}" id="slider_${f.key}">
+      <div class="weight-tag">weight: ${(weights[f.key]*100).toFixed(1)}%</div>
+    `;
+    slidersEl.appendChild(div);
+    const input = div.querySelector("input");
+    sliderInputs[f.key] = input;
+    input.addEventListener("input", ()=>{
+      document.getElementById(`val_${f.key}`).textContent = parseFloat(input.value).toFixed(1);
+      recompute();
+    });
+  });
+}
+
+function bandOf(score){
+  if(score<=33) return {label:"LOW RISK", color:"var(--green)"};
+  if(score<=66) return {label:"MODERATE RISK", color:"var(--gold)"};
+  return {label:"HIGH RISK", color:"var(--red)"};
+}
+
+function recompute(){
+  let score = 0;
+  FACTORS.forEach(f=>{ score += weights[f.key] * parseFloat(sliderInputs[f.key].value); });
+  score = Math.round(score*10)/10;
+
+  const b = bandOf(score);
+  document.getElementById("scoreNum").textContent = score.toFixed(1);
+  document.getElementById("scoreNum").style.color = b.color;
+  document.getElementById("bandLbl").textContent = b.label;
+  document.getElementById("bandLbl").style.color = b.color;
+  document.getElementById("markerCur").style.left = score+"%";
+
+  const ticker = sel.value;
+  const stock = DATA.stocks[ticker];
+  document.getElementById("markerPred").style.left = stock.predicted_score+"%";
+  document.getElementById("curNum").textContent = stock.current_score.toFixed(1);
+  document.getElementById("prdNum").textContent = stock.predicted_score.toFixed(1);
+
+  const delta = stock.predicted_score - stock.current_score;
+  const trendEl = document.getElementById("trendLbl");
+  if(Math.abs(delta) < 0.3){
+    trendEl.textContent = "Risk holding steady";
+    trendEl.style.color = "var(--muted)";
+  } else if(delta > 0){
+    trendEl.textContent = `Risk trending UP (+${delta.toFixed(1)} pts predicted)`;
+    trendEl.style.color = "var(--red)";
+  } else {
+    trendEl.textContent = `Risk trending DOWN (${delta.toFixed(1)} pts predicted)`;
+    trendEl.style.color = "var(--green)";
+  }
+}
+
+function loadTicker(ticker){
+  buildSliders(ticker);
+  recompute();
+}
+
+sel.addEventListener("change", ()=>loadTicker(sel.value));
+document.getElementById("resetBtn").addEventListener("click", ()=>loadTicker(sel.value));
+
+sel.value = tickers[0];
+loadTicker(tickers[0]);
+</script>
+</body>
+</html>

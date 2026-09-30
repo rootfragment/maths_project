@@ -1,8 +1,4 @@
-# risk_model/ — module reference
-
-Comments were stripped from the source files for a clean handoff. This
-file is the explanation layer instead — read it alongside the code.
-
+# risk_model
 ## config.py
 
 Constants shared by every other module: the default ticker list,

@@ -1,8 +1,4 @@
-# risk_model_output.json — schema reference
-
-This is the contract between the Python pipeline and the UI. If a field name
-or range below changes, update this file in the same commit.
-
+# risk_model_output.json 
 ## Top-level shape
 
 ```
@@ -50,6 +46,5 @@ Risk bands (fixed, used consistently across script + dashboard):
 
 - `track_record` is a max-drawdown proxy, not a credit rating — avoid implying it's official.
 - `predicted_score` reflects a change in forecast *volatility only* — leverage, correlation,
-  liquidity and track_record stay fixed between current/predicted. If asked "why didn't
-  leverage change," that's why.
+  liquidity and track_record stay fixed between current/predicted.
 - The model predicts a risk **score direction**, never a price direction 

@@ -76,6 +76,89 @@ CLI entrypoint. `parse_args()` defines the flags (`--tickers`,
 `--period`, `--output`, `--plots-dir`, `--no-plots`); `run(...)` wires
 together `data.py` → `weights.py` → `predict.py` → `plotting.py` and
 writes the final JSON. `main()` just parses args and calls `run`.
+## Custom Universe & CLI Reference
 
+By default the model scores a built-in universe of 20 tickers (`DEFAULT_TICKERS` in `risk_model/config.py`). You can point it at your own set of tickers instead. Weights, the volatility forecast, charts and the output JSON are then all computed on **your** universe.
+
+### Choosing a universe
+
+The universe is resolved in this order:
+
+| Priority | Source | How |
+|---|---|---|
+| 1 | Universe file | `--universe my_universe.csv` |
+| 2 | Inline list | `--tickers AAPL MSFT GOOG ...` |
+| 3 | Built-in default | no flag needed |
+
+If `--universe` is given but the file is missing or contains no tickers, the run **stops with an error** rather than silently falling back to the defaults, so you never get results for the wrong set of stocks.
+
+### Universe file formats
+
+| Format | Expected layout |
+|---|---|
+| `.csv` | A column named `ticker` or `symbol` (case-insensitive). If no such header exists, the first column is used. Extra columns are ignored. |
+| `.json` | A list (`["AAPL", "MSFT"]`) or an object with a `tickers`, `universe` or `symbols` list. |
+| `.txt` | Tickers separated by spaces, commas or newlines. `#` starts a comment. |
+
+Symbols are uppercased and de-duplicated automatically.
+
+Example `my_universe.csv`:
+
+```csv
+ticker,name,sector
+AAPL,Apple,Technology
+JPM,JPMorgan Chase,Financials
+XOM,Exxon Mobil,Energy
+```
+
+### Command-line arguments
+
+Run from the project root:
+
+```bash
+python -m risk_model.main [options]
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--universe FILE` | none | Path to a `.csv`, `.json` or `.txt` universe file. Overrides `--tickers`. |
+| `--tickers T1 T2 ...` | none | Space-separated tickers to analyze. Ignored if `--universe` is set. |
+| `--benchmark TICKER` | `^GSPC` | Benchmark index for the correlation (beta) factor. |
+| `--period P` | `3y` | yfinance history window, e.g. `2y`, `5y`, `10y`, `max`. |
+| `--output FILE` | `risk_model_output.json` | Where to write the results JSON (the folder must already exist). |
+| `--plots-dir DIR` | `plots` | Folder for the per-stock PNG charts (created if missing). |
+| `--no-plots` | off | Skip chart generation. |
+| `-h`, `--help` | | Show the argument list. |
+
+### Examples
+
+```bash
+# Built-in 20-ticker universe
+python -m risk_model.main
+
+# Your own universe from a file
+python -m risk_model.main --universe my_universe.csv
+
+# Quick ad-hoc run on a handful of tickers
+python -m risk_model.main --tickers AAPL MSFT GOOG JPM XOM KO
+
+# Longer history, no charts
+python -m risk_model.main --universe my_universe.csv --period 5y --no-plots
+
+# Custom output locations
+python -m risk_model.main --universe my_universe.csv \
+    --output results/out.json --plots-dir results/charts
+
+# Benchmark against the Nasdaq-100 instead of the S&P 500
+python -m risk_model.main --benchmark QQQ
+```
+
+> **Windows (cmd.exe):** `^` is an escape character, so quote it if you pass the S&P symbol yourself: `--benchmark "^GSPC"`.
+
+### Notes
+
+- Tickers with fewer than ~100 trading days of history are skipped, and the run needs at least 5 usable tickers to derive weights.
+- Output files are generated artifacts and are git-ignored (`risk_model_output.json`, `plots/`).
+- `risk_dashboard.html` embeds a static snapshot of the output JSON. After running on a new universe, paste the regenerated JSON into the dashboard's `DATA` constant to view it there.
 Run as `python -m risk_model.main` from the parent directory (not from
 inside this folder).

@@ -1,18 +1,23 @@
 import argparse
 import json
 
-from .config import DEFAULT_TICKERS, DEFAULT_BENCHMARK, DEFAULT_PERIOD
+from .config import DEFAULT_BENCHMARK, DEFAULT_PERIOD
 from .config import DEFAULT_OUTPUT_JSON, DEFAULT_PLOTS_DIR, FACTOR_KEYS
 from .data import fetch_all, normalize
 from .config import CAPS
 from .weights import derive_weights_regression, derive_weights_pca, blend_weights
 from .predict import predict_next_volatility
 from .plotting import plot_stock
+from .universe import resolve_universe
 
 def parse_args():
     p = argparse.ArgumentParser(description="Run the quantitative risk model pipeline.")
-    p.add_argument("--tickers", nargs="+", default=DEFAULT_TICKERS,
-                    help="Space-separated list of tickers to analyze.")
+    p.add_argument("--universe", default=None, metavar="FILE",
+                    help="Path to a custom universe file (.csv, .txt or .json) "
+                         "listing the tickers to analyze. If omitted, falls back "
+                         "to --tickers, then to the built-in default universe.")
+    p.add_argument("--tickers", nargs="+", default=None,
+                    help="Space-separated list of tickers (ignored if --universe is given).")
     p.add_argument("--benchmark", default=DEFAULT_BENCHMARK,
                     help="Benchmark ticker for beta/correlation (default: S&P 500).")
     p.add_argument("--period", default=DEFAULT_PERIOD,
@@ -26,12 +31,14 @@ def parse_args():
     return p.parse_args()
 
 def run(tickers, benchmark, period, output_path, plots_dir, make_plots=True):
+    print(f"Universe: {len(tickers)} tickers")
     print("Fetching data...")
     all_data = fetch_all(tickers, benchmark, period)
     if len(all_data) < 5:
         raise RuntimeError(
-            f"Only {len(all_data)} tickers returned usable data; "
-            f"need at least 5 for stable weight derivation."
+            f"Only {len(all_data)} of {len(tickers)} tickers returned usable data; "
+            f"need at least 5 for stable weight derivation. If you passed a "
+            f"custom universe, check the symbols are valid yfinance tickers."
         )
 
     print("\nDeriving weights from data...")
@@ -89,8 +96,10 @@ def run(tickers, benchmark, period, output_path, plots_dir, make_plots=True):
 
 def main():
     args = parse_args()
+    tickers, source = resolve_universe(args.universe, args.tickers)
+    print(f"Using {source}")
     run(
-        tickers=args.tickers,
+        tickers=tickers,
         benchmark=args.benchmark,
         period=args.period,
         output_path=args.output,

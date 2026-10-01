@@ -153,12 +153,8 @@ python -m risk_model.main --universe my_universe.csv \
 python -m risk_model.main --benchmark QQQ
 ```
 
-> **Windows (cmd.exe):** `^` is an escape character, so quote it if you pass the S&P symbol yourself: `--benchmark "^GSPC"`.
-
 ### Notes
 
 - Tickers with fewer than ~100 trading days of history are skipped, and the run needs at least 5 usable tickers to derive weights.
-- Output files are generated artifacts and are git-ignored (`risk_model_output.json`, `plots/`).
 - `risk_dashboard.html` embeds a static snapshot of the output JSON. After running on a new universe, paste the regenerated JSON into the dashboard's `DATA` constant to view it there.
-Run as `python -m risk_model.main` from the parent directory (not from
-inside this folder).
+Run as `python -m risk_model.main`.
